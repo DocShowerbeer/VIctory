@@ -210,7 +210,21 @@ mod tests {
         let mut token = 0;
         let flips: Vec<u64> = (0..4)
             .map(|_| {
-                let _ = wait(null, 0, 0, std::ptr::null(), TOKEN_ON_TIMEOUT, &mut token);
+                let previous = token;
+                assert_eq!(
+                    wait(
+                        null,
+                        ORIGIN,
+                        0,
+                        std::ptr::null(),
+                        TOKEN_ON_TIMEOUT,
+                        &mut token
+                    ),
+                    TIMEOUT
+                );
+                if previous != 0 {
+                    assert_eq!(token, previous + 1);
+                }
                 assert_eq!(
                     wait(null, FLIP, u32::MAX, std::ptr::null(), 0, &mut token),
                     S_OK
@@ -218,7 +232,9 @@ mod tests {
                 LAST[2].load(Ordering::Relaxed)
             })
             .collect();
-        assert!(flips.windows(2).all(|w| w[1] == w[0] + 1), "{flips:?}");
+        // Host scheduling can skip elapsed ticks.
+        // Each completed flip must still advance to a new tick.
+        assert!(flips.windows(2).all(|w| w[1] > w[0]), "{flips:?}");
         // Even when a flip wait begins on the tick another just ended on.
         let (tick, _) = next_tick(FLIP);
         assert!(tick > flips[3]);
